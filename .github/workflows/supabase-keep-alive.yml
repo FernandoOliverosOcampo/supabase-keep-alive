@@ -1,8 +1,9 @@
+
 name: Supabase Keep Alive
 
 on:
   schedule:
-  - cron: '0 12,17,22 * * *'
+    - cron: '0 12,17,22 * * *'
   workflow_dispatch:
 
 jobs:
@@ -10,8 +11,66 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Ping Supabase Database
+      - name: Keep Supabase projects active
+        env:
+          SUPABASE_URL_1: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY_1: ${{ secrets.SUPABASE_ANON_KEY }}
+
+          SUPABASE_URL_2: ${{ secrets.SUPABASE_URL_2 }}
+          SUPABASE_KEY_2: ${{ secrets.SUPABASE_ANON_KEY_2 }}
+
+          SUPABASE_URL_3: ${{ secrets.SUPABASE_URL_3 }}
+          SUPABASE_KEY_3: ${{ secrets.SUPABASE_ANON_KEY_3 }}
+
+          SUPABASE_URL_4: ${{ secrets.SUPABASE_URL_4 }}
+          SUPABASE_KEY_4: ${{ secrets.SUPABASE_ANON_KEY_4 }}
+
+          SUPABASE_URL_5: ${{ secrets.SUPABASE_URL_5 }}
+          SUPABASE_KEY_5: ${{ secrets.SUPABASE_ANON_KEY_5 }}
+
         run: |
-          curl -sS -i \
-            "${{ secrets.SUPABASE_URL }}/rest/v1/keep_alive?select=id&limit=1" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}"
+          success=0
+          failed=0
+
+          for i in 1 2 3 4 5; do
+            url_var="SUPABASE_URL_${i}"
+            key_var="SUPABASE_KEY_${i}"
+
+            url="${!url_var}"
+            key="${!key_var}"
+
+            if [ -z "$url" ] && [ -z "$key" ]; then
+              echo "Project $i: Not configured. Skipping."
+              continue
+            fi
+
+            if [ -z "$url" ] || [ -z "$key" ]; then
+              echo "Project $i: Missing URL or API key."
+              failed=$((failed + 1))
+              continue
+            fi
+
+            url="${url%/}"
+
+            echo "Checking Supabase project $i..."
+
+            if curl --fail --silent --show-error \
+              "${url}/rest/v1/keep_alive?select=id&limit=1" \
+              -H "apikey: ${key}" \
+              -o /dev/null; then
+
+              echo "Project $i: SUCCESS"
+              success=$((success + 1))
+            else
+              echo "Project $i: FAILED"
+              failed=$((failed + 1))
+            fi
+          done
+
+          echo "--------------------------------"
+          echo "Successful projects: $success"
+          echo "Failed projects: $failed"
+
+          if [ "$success" -eq 0 ] || [ "$failed" -gt 0 ]; then
+            exit 1
+          fi
